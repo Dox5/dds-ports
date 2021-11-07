@@ -1,8 +1,10 @@
 import asyncio
 import concurrent.futures
-from typing import Awaitable, TypeVar, Callable, Iterable
+from typing import Awaitable, TypeVar, Callable, Iterable, TextIO
 from pathlib import Path
 import shutil
+import contextlib
+import tempfile
 
 _FS_POOL = concurrent.futures.ThreadPoolExecutor(8)  # pylint: disable=consider-using-with
 
@@ -67,3 +69,18 @@ def _copy_files(*, into: Path, files: Iterable[Path], whence: Path) -> None:
 
 async def copy_files(*, into: Path, files: Iterable[Path], whence: Path) -> None:
     await _run_fs_op(lambda: _copy_files(into=into, files=files, whence=whence))
+
+async def filter_file_contents(*, files: Iterable[Path], fn: Callable[[TextIO, TextIO], None]):
+    def impl():
+        for input_file in files:
+            with contextlib.ExitStack() as stack:
+                input_fh = stack.enter_context(input_file.open("r", encoding="UTF-8"))
+                output_fh = stack.enter_context(tempfile.NamedTemporaryFile("w", encoding="UTF-8", delete=False))
+                output_file = Path(output_fh.name)
+
+                fn(input_fh, output_fh)
+
+            print(f"Filtered {input_file} (via f{output_file})")
+            output_file.rename(input_file)
+
+    await _run_fs_op(impl)
