@@ -19,6 +19,19 @@ class CommandArguments(Protocol):
     ports_dir: Path
     repo_dir: Path
 
+def packaged_something(root):
+    def has_content_dirs(path):
+        wanted = [path / "src", path / "include"]
+        return any(hay.is_dir() for hay in wanted)
+
+    if has_content_dirs(root):
+        return True
+
+    libs_dir = root / "libs"
+    if not libs_dir.is_dir():
+        return False
+
+    return any(has_content_dirs(lib) for lib in libs_dir.iterdir())
 
 def check_sdist(pid: PackageID, dirpath: Path) -> None:
     cand_files = ('package.json', 'package.json5', 'package.jsonc')
@@ -39,8 +52,8 @@ def check_sdist(pid: PackageID, dirpath: Path) -> None:
     if manver != pid.version:
         raise RuntimeError(f'Package manifest for {pid} declares a different version [{manver}]')
 
-    if not dirpath.joinpath('src').is_dir() and not dirpath.joinpath('include').is_dir():
-        raise RuntimeError(f'Package {pid} does not contain either a src/ or include/ directory')
+    if not packaged_something(dirpath):
+        raise RuntimeError(f'Package {pid} does not contain either a src/ or include/ directory (or a library that did)')
     print(f'Package {pid} is OK')
 
 
